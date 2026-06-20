@@ -438,7 +438,7 @@ def gerar_dashboard_matplotlib():
         severidades = {}
         tipos = {}
         
-    plt.style.use('dark_background')
+    plt.style.use('default')
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4), dpi=150)
     fig.patch.set_facecolor('none')  # Fundo da figura transparente
     
@@ -446,20 +446,20 @@ def gerar_dashboard_matplotlib():
     ax1.set_facecolor('none')
     sev_categories = ["BAIXO", "MÉDIO", "ALTO", "CRÍTICO"]
     sev_counts = [severidades.get(cat, 0) for cat in sev_categories]
-    sev_colors = ['#33cc99', '#e6b800', '#ff944d', '#ff4d4d']
+    sev_colors = ['#10b981', '#d97706', '#f97316', '#ef4444']
     
     if sum(sev_counts) == 0:
-        ax1.text(0.5, 0.5, "Sem dados de severidade cadastrados", ha="center", va="center", color="#64748b", fontsize=9)
+        ax1.text(0.5, 0.5, "Sem dados de severidade cadastrados", ha="center", va="center", color="#94a3b8", fontsize=9)
         ax1.set_axis_off()
     else:
         bars = ax1.bar(sev_categories, sev_counts, color=sev_colors, width=0.5, alpha=0.9, edgecolor='none', linewidth=0)
         ax1.spines['top'].set_visible(False)
         ax1.spines['right'].set_visible(False)
-        ax1.spines['left'].set_color((1, 1, 1, 0.15))
-        ax1.spines['bottom'].set_color((1, 1, 1, 0.15))
-        ax1.tick_params(colors='#94a3b8', labelsize=8)
-        ax1.grid(axis='y', linestyle=':', alpha=0.15)
-        ax1.set_title("Defeitos por Severidade", color="#ffffff", fontsize=10, fontweight="bold", pad=12)
+        ax1.spines['left'].set_color('#cbd5e1')
+        ax1.spines['bottom'].set_color('#cbd5e1')
+        ax1.tick_params(colors='#475569', labelsize=8)
+        ax1.grid(axis='y', linestyle=':', alpha=0.3, color='#cbd5e1')
+        ax1.set_title("Defeitos por Severidade", color="#0f172a", fontsize=10, fontweight="bold", pad=12)
         for bar in bars:
             height = bar.get_height()
             if height > 0:
@@ -467,28 +467,28 @@ def gerar_dashboard_matplotlib():
                             xy=(bar.get_x() + bar.get_width() / 2, height),
                             xytext=(0, 3),
                             textcoords="offset points",
-                            ha='center', va='bottom', fontsize=8, color='#ffffff', fontweight='bold')
+                            ha='center', va='bottom', fontsize=8, color='#334155', fontweight='bold')
                             
     # Gráfico 2: Tipos de Defeito
     ax2.set_facecolor('none')
     if not tipos:
-        ax2.text(0.5, 0.5, "Sem dados de tipos de defeito", ha="center", va="center", color="#64748b", fontsize=9)
+        ax2.text(0.5, 0.5, "Sem dados de tipos de defeito", ha="center", va="center", color="#94a3b8", fontsize=9)
         ax2.set_axis_off()
     else:
         t_names = list(tipos.keys())
         t_counts = list(tipos.values())
         y_pos = range(len(t_names))
         
-        bars = ax2.barh(y_pos, t_counts, color='#4db8ff', height=0.5, alpha=0.9, edgecolor='none', linewidth=0)
+        bars = ax2.barh(y_pos, t_counts, color='#2563eb', height=0.5, alpha=0.9, edgecolor='none', linewidth=0)
         ax2.set_yticks(y_pos)
-        ax2.set_yticklabels(t_names, color='#94a3b8', fontsize=8)
+        ax2.set_yticklabels(t_names, color='#475569', fontsize=8)
         ax2.spines['top'].set_visible(False)
         ax2.spines['right'].set_visible(False)
-        ax2.spines['left'].set_color((1, 1, 1, 0.15))
-        ax2.spines['bottom'].set_color((1, 1, 1, 0.15))
-        ax2.tick_params(colors='#94a3b8', labelsize=8)
-        ax2.grid(axis='x', linestyle=':', alpha=0.15)
-        ax2.set_title("Ocorrências por Tipo de Defeito", color="#ffffff", fontsize=10, fontweight="bold", pad=12)
+        ax2.spines['left'].set_color('#cbd5e1')
+        ax2.spines['bottom'].set_color('#cbd5e1')
+        ax2.tick_params(colors='#475569', labelsize=8)
+        ax2.grid(axis='x', linestyle=':', alpha=0.3, color='#cbd5e1')
+        ax2.set_title("Ocorrências por Tipo de Defeito", color="#0f172a", fontsize=10, fontweight="bold", pad=12)
         for bar in bars:
             width = bar.get_width()
             if width > 0:
@@ -496,7 +496,7 @@ def gerar_dashboard_matplotlib():
                             xy=(width, bar.get_y() + bar.get_height() / 2),
                             xytext=(3, 0),
                             textcoords="offset points",
-                            ha='left', va='center', fontsize=8, color='#ffffff', fontweight='bold')
+                            ha='left', va='center', fontsize=8, color='#334155', fontweight='bold')
                             
     plt.tight_layout()
     chart_path = os.path.join("temp", "dashboard_defeitos.png")

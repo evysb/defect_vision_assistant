@@ -15,42 +15,61 @@ init_db()
 os.makedirs("./uploads", exist_ok=True)
 os.makedirs("./temp", exist_ok=True)
 
-# CSS Estilizado de Alta Performance para Manutenção Industrial (Charcoal, Dark Slate & Neon Highlights)
+# CSS Estilizado de Alta Performance para Manutenção Industrial (Light Theme)
 CSS_STYLE = """
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
-body {
-    background-color: #080b11;
-    color: #e2e8f0;
+:root, .dark {
+    --body-background-fill: #f1f5f9 !important;
+    --body-text-color: #1e293b !important;
+    --background-fill-primary: #ffffff !important;
+    --background-fill-secondary: #f8fafc !important;
+    --border-color-primary: #e2e8f0 !important;
+    --border-color-secondary: #cbd5e1 !important;
+    --block-background-fill: #ffffff !important;
+    --block-border-color: #e2e8f0 !important;
+    --block-title-text-color: #0f172a !important;
+    --block-label-text-color: #475569 !important;
+    --input-background-fill: #ffffff !important;
+    --input-border-color: #e2e8f0 !important;
+    --input-text-color: #0f172a !important;
+    --table-border-color: #e2e8f0 !important;
+    --table-even-background-fill: #f8fafc !important;
+    --table-row-focus: #f1f5f9 !important;
 }
-.gradio-container {
-    background: radial-gradient(circle at top right, #1a2236, #0e1322, #080b11) !important;
+
+body, .dark body {
+    background-color: #f1f5f9 !important;
+    color: #1e293b !important;
+}
+.gradio-container, .dark .gradio-container {
+    background: linear-gradient(135deg, #ffffff, #f8fafc) !important;
     max-width: 1200px !important;
     border-radius: 20px !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7) !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.06) !important;
     font-family: 'Outfit', sans-serif !important;
     padding: 20px !important;
 }
-.tab-nav {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+.tab-nav, .dark .tab-nav {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08) !important;
     margin-bottom: 25px !important;
 }
-.tab-nav button {
+.tab-nav button, .dark .tab-nav button {
     font-size: 16px !important;
     font-weight: 600 !important;
-    color: #94a3b8 !important;
+    color: #64748b !important;
     border-bottom: 3px solid transparent !important;
     padding: 12px 24px !important;
     transition: all 0.2s ease !important;
 }
-.tab-nav button.selected {
-    color: #4db8ff !important;
-    border-bottom: 3px solid #4db8ff !important;
+.tab-nav button.selected, .dark .tab-nav button.selected {
+    color: #2563eb !important;
+    border-bottom: 3px solid #2563eb !important;
     background: transparent !important;
 }
-.primary-btn {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+.primary-btn, .dark .primary-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
     border: none !important;
     color: white !important;
     font-weight: 700 !important;
@@ -58,87 +77,88 @@ body {
     padding: 10px 20px !important;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-.primary-btn:hover {
-    background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+.primary-btn:hover, .dark .primary-btn:hover {
+    background: linear-gradient(135deg, #60a5fa, #3b82f6) !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4) !important;
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.2) !important;
 }
-.danger-btn {
-    background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+.danger-btn, .dark .danger-btn {
+    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
     border: none !important;
     color: white !important;
     font-weight: 700 !important;
     border-radius: 10px !important;
     transition: all 0.25s ease !important;
 }
-.danger-btn:hover {
-    background: linear-gradient(135deg, #ef4444, #dc2626) !important;
+.danger-btn:hover, .dark .danger-btn:hover {
+    background: linear-gradient(135deg, #f87171, #ef4444) !important;
     transform: translateY(-2px) !important;
-    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.4) !important;
+    box-shadow: 0 8px 20px rgba(220, 38, 38, 0.2) !important;
 }
-.critico-banner {
-    background: linear-gradient(135deg, #5c0f0f, #2e0808) !important;
-    border: 2px solid #ff4d4d !important;
+.critico-banner, .dark .critico-banner {
+    background: linear-gradient(135deg, #fef2f2, #fee2e2) !important;
+    border: 2px solid #ef4444 !important;
+    color: #991b1b !important;
     border-radius: 12px !important;
     padding: 15px !important;
     margin-bottom: 20px !important;
-    box-shadow: 0 0 20px rgba(255, 77, 77, 0.3) !important;
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.15) !important;
     animation: pulse-red 2s infinite alternate !important;
 }
 @keyframes pulse-red {
     0% {
-        box-shadow: 0 0 10px rgba(255, 77, 77, 0.2);
-        border-color: #ff4d4d;
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+        border-color: #fca5a5;
     }
     100% {
-        box-shadow: 0 0 25px rgba(255, 77, 77, 0.5);
-        border-color: #ff1a1a;
+        box-shadow: 0 0 25px rgba(239, 68, 68, 0.3);
+        border-color: #ef4444;
     }
 }
 /* Cards do Histórico de Defeitos */
-.defect-grid {
+.defect-grid, .dark .defect-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
     gap: 20px;
     padding: 10px 0;
 }
-.defect-card {
-    background: rgba(255, 255, 255, 0.02);
+.defect-card, .dark .defect-card {
+    background: rgba(255, 255, 255, 0.9) !important;
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
     border-radius: 14px;
     display: flex;
     overflow: hidden;
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04) !important;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.defect-card:hover {
+.defect-card:hover, .dark .defect-card:hover {
     transform: translateY(-5px);
-    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.4);
-    border-color: rgba(77, 184, 255, 0.4);
-    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.08) !important;
+    border-color: rgba(37, 99, 235, 0.3) !important;
+    background: #ffffff !important;
 }
-.card-left {
+.card-left, .dark .card-left {
     width: 110px;
     min-width: 110px;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.02) !important;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid rgba(0, 0, 0, 0.06) !important;
 }
 .defect-thumb {
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
-.defect-no-img {
-    color: #64748b;
+.defect-no-img, .dark .defect-no-img {
+    color: #64748b !important;
     font-size: 12px;
     text-align: center;
     padding: 10px;
 }
-.card-right {
+.card-right, .dark .card-right {
     padding: 14px;
     flex-grow: 1;
     display: flex;
@@ -152,11 +172,11 @@ body {
     margin-bottom: 6px;
     gap: 8px;
 }
-.card-header-row h3 {
+.card-header-row h3, .dark .card-header-row h3 {
     margin: 0;
     font-size: 15px;
     font-weight: 700;
-    color: #ffffff;
+    color: #0f172a !important;
 }
 .badge {
     font-size: 9px;
@@ -165,47 +185,47 @@ body {
     font-weight: 800;
     white-space: nowrap;
 }
-.badge-critico {
-    background-color: rgba(239, 68, 68, 0.15);
-    color: #ff4d4d;
-    border: 1px solid rgba(239, 68, 68, 0.4);
+.badge-critico, .dark .badge-critico {
+    background-color: rgba(239, 68, 68, 0.1) !important;
+    color: #dc2626 !important;
+    border: 1px solid rgba(239, 68, 68, 0.3) !important;
 }
-.badge-alto {
-    background-color: rgba(249, 115, 22, 0.15);
-    color: #ff944d;
-    border: 1px solid rgba(249, 115, 22, 0.4);
+.badge-alto, .dark .badge-alto {
+    background-color: rgba(249, 115, 22, 0.1) !important;
+    color: #ea580c !important;
+    border: 1px solid rgba(249, 115, 22, 0.3) !important;
 }
-.badge-medio {
-    background-color: rgba(234, 179, 8, 0.15);
-    color: #e6b800;
-    border: 1px solid rgba(234, 179, 8, 0.4);
+.badge-medio, .dark .badge-medio {
+    background-color: rgba(234, 179, 8, 0.1) !important;
+    color: #ca8a04 !important;
+    border: 1px solid rgba(234, 179, 8, 0.3) !important;
 }
-.badge-baixo {
-    background-color: rgba(16, 185, 129, 0.15);
-    color: #33cc99;
-    border: 1px solid rgba(16, 185, 129, 0.4);
+.badge-baixo, .dark .badge-baixo {
+    background-color: rgba(16, 185, 129, 0.1) !important;
+    color: #059669 !important;
+    border: 1px solid rgba(16, 185, 129, 0.3) !important;
 }
-.card-body-row {
+.card-body-row, .dark .card-body-row {
     font-size: 12px;
-    color: #94a3b8;
+    color: #475569 !important;
     margin: 3px 0;
 }
-.card-details {
+.card-details, .dark .card-details {
     margin-top: 8px;
     font-size: 11px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.02) !important;
     border-radius: 6px;
     padding: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.04) !important;
 }
-.card-details summary {
+.card-details summary, .dark .card-details summary {
     cursor: pointer;
     font-weight: 600;
-    color: #4db8ff;
+    color: #2563eb !important;
     outline: none;
 }
-.card-details p {
-    color: #cbd5e1;
+.card-details p, .dark .card-details p {
+    color: #334155 !important;
     margin: 4px 0;
 }
 """
@@ -233,7 +253,7 @@ def render_historico_html() -> str:
     try:
         defeitos = obter_todos_defeitos()
     except Exception as e:
-        return f"<p style='color: #ff4d4d;'>Erro ao ler histórico: {str(e)}</p>"
+        return f"<p style='color: #dc2626;'>Erro ao ler histórico: {str(e)}</p>"
         
     if not defeitos:
         return """
@@ -286,7 +306,7 @@ def render_historico_html() -> str:
                 <details class="card-details">
                     <summary>Ver Detalhes do Defeito</summary>
                     <p><strong>Causa Raiz:</strong> {d["causa"] or "Não informada"}</p>
-                    <p style="color: #4db8ff;"><strong>Ação Corretiva:</strong> {d["acao"] or "Nenhuma recomendada"}</p>
+                    <p style="color: #2563eb;"><strong>Ação Corretiva:</strong> {d["acao"] or "Nenhuma recomendada"}</p>
                     <p style="font-size: 9px; color: #64748b; margin-top: 6px;">ID: {d["id"]}</p>
                 </details>
             </div>
@@ -390,11 +410,11 @@ with gr.Blocks(title="Assistente de Manutenção Industrial") as interface:
     
     # Título Principal do Painel
     gr.HTML("""
-    <div style='text-align: center; margin-bottom: 25px; border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 15px;'>
-        <h1 style='font-size: 30px; font-weight: 800; color: #ffffff; margin-bottom: 5px; letter-spacing: -0.5px;'>
+    <div style='text-align: center; margin-bottom: 25px; border-bottom: 1px solid rgba(0,0,0,0.06); padding-bottom: 15px;'>
+        <h1 style='font-size: 30px; font-weight: 800; color: #0f172a; margin-bottom: 5px; letter-spacing: -0.5px;'>
             🛠️ DefectVision Industrial Assistant
         </h1>
-        <p style='color: #94a3b8; font-size: 15px; margin: 0;'>
+        <p style='color: #475569; font-size: 15px; margin: 0;'>
             Inspeção visual automatizada de peças e consulta de histórico em linguagem natural via IA
         </p>
     </div>
