@@ -434,7 +434,8 @@ with gr.Blocks(title="Assistente de Manutenção Industrial") as interface:
                     )
                     
                     backend_select = gr.Radio(
-                        choices=["Hugging Face BLIP-large (Local)", "Simulador Local (Offline)"],
+                        #choices=["Hugging Face BLIP-large (Local)", "Simulador Local (Offline)"],
+                        choices=["Hugging Face BLIP-large (Local)"],
                         value="Hugging Face BLIP-large (Local)",
                         label="Modelo de Análise Visual"
                     )
