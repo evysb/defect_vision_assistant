@@ -1,0 +1,7 @@
+gradio>=4.0
+transformers>=4.35
+torch
+Pillow
+matplotlib
+pandas
+python-dotenv
