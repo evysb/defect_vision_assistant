@@ -93,16 +93,17 @@ graph TD
     cd defectvision-assistant
     ```
 
-2.  **Configurar Ambiente Virtual (Recomendado)**:
+2.  **Configurar o Ambiente Virtual com Conda**:
     ```bash
-    python -m venv venv
-    # No Windows:
-    venv\Scripts\activate
-    # No Linux/MacOS:
-    source venv/bin/activate
+    # Criar o ambiente virtual com Python 3.10
+    conda create --name defectvision python=3.10 -y
+    
+    # Ativar o ambiente virtual
+    conda activate defectvision
     ```
 
 3.  **Instalar Dependências**:
+    Com o ambiente virtual ativado, instale as dependências executando:
     ```bash
     pip install -r requirements.txt
     ```
