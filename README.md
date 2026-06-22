@@ -21,7 +21,11 @@ graph TD
     H -->|4. Atualiza Galeria & Matplotlib| B
     
     A -->|5. Digita Busca em Linguagem Natural| I[Aba de Consulta]
-    I -->|6. Tradução Semântica| J[Compilador de Query SQL Segura]
+    I -->|6. Tradução para SQL| L{Motor Text-to-SQL}
+    L -->|Opção Padrão| M[Regras Locais por Palavra-chave]
+    L -->|Opção de IA Generativa| N[Hugging Face google/flan-t5-large]
+    M -->|Query SQL| J[Compilador de Query SQL Segura]
+    N -->|Query SQL| J
     J -->|7. Executa SELECT somente-leitura| H
     H -->|8. Retorna Linhas| K[Visualização de Tabela & Exportador CSV]
     K -->|Exibe Relatório| A
@@ -47,7 +51,12 @@ graph TD
     *   *"todos os registros de ferrugem"*
     *   *"quantas inspeções esta semana"*
     *   *"peças com severidade alta em junho"*
-*   **Compilador Seguro**: O backend traduz a consulta em SQL dinâmico e aplica uma camada de proteção robusta (bloqueia comandos de alteração de tabelas como `DROP`, `DELETE`, `INSERT`, `ALTER`, executando a query em modo `sqlite3` de somente leitura).
+*   **Dois Motores de Tradução**, selecionáveis na interface:
+    *   **Baseado em Regras (Local)**: casamento de palavras-chave e datas relativas em português, sem dependência de modelos de IA.
+    *   **Hugging Face Flan-T5-Large (IA Generativa)**: usa o modelo [google/flan-t5-large](https://huggingface.co/google/flan-t5-large) (carregado sob demanda na CPU) para traduzir a pergunta em SQL via aprendizado em contexto (*few-shot prompting*) com o esquema da tabela e a data atual injetados no prompt. Esse modelo foi escolhido por ser *instruction-tuned* e aceitar few-shot em português — diferente de modelos "dedicados" de text-to-SQL (ex. SQLCoder, NSQL), que são treinados só com perguntas em inglês e não seguem instruções. A variante "large" (~780M parâmetros) substituiu a "base" (~250M) após testes mostrarem que a "base" ecoava exemplos do prompt quase ao acaso, até em perguntas idênticas a um exemplo few-shot.
+        *   A saída do modelo passa por uma normalização automática: correção de nomes de coluna alucinados com acento/grafia incorreta via *fuzzy matching*, remoção de condições `OR` duplicadas, inclusão de `ORDER BY data DESC` quando ausente, e uma rede de segurança que extrai o termo de busca livre da própria pergunta (padrões como "registros de X") e o injeta na query se o modelo tiver "ecoado" o termo de um exemplo few-shot em vez do termo real perguntado.
+        *   **Trade-off conhecido**: por ser um modelo de propósito geral (não fine-tuned especificamente para SQL), o motor de IA generativa é mais flexível para perguntas com fraseado livre, mas pode gerar consultas menos completas do que o motor de regras para sinônimos específicos do domínio (ex.: associar "ferrugem" a "corrosão"/"oxidação" e à coluna `causa`), mesmo quando o prompt já contém um exemplo few-shot equivalente. Além disso, por rodar inteiramente em CPU, a variante "large" tem latência maior do que o motor de regras.
+*   **Compilador Seguro**: independentemente do motor escolhido, a consulta gerada passa por uma camada de proteção robusta (bloqueia comandos de alteração de tabelas como `DROP`, `DELETE`, `INSERT`, `ALTER`, executando a query em modo `sqlite3` de somente leitura).
 *   **Exportação**: Tabela interativa com resultados e opção para baixar os dados em formato CSV para integração industrial.
 
 ### 3. 📊 Indicadores Gerais & Galeria Visual (Dashboard)
@@ -59,7 +68,9 @@ graph TD
 ## 🛠️ Tecnologias Utilizadas
 
 *   **Interface Web**: [Gradio](https://gradio.app/) (CSS customizado com tema claro premium baseado em Slate & Blue).
-*   **Visão Computacional**: [Hugging Face Transformers](https://huggingface.co/) e [PyTorch](https://pytorch.org/) (Carregamento lazy e execução do BLIP-large).
+*   **Visão Computacional**: [Hugging Face Transformers](https://huggingface.co/) e [PyTorch](https://pytorch.org/) (Carregamento lazy do BLIP-large).
+*   **Text-to-SQL via IA Generativa**: [google/flan-t5-large](https://huggingface.co/google/flan-t5-large) (carregamento lazy, few-shot prompting).
+*   **Aceleração por GPU**: detecção automática de GPU NVIDIA via CUDA (`torch.cuda.is_available()`) — BLIP-large e Flan-T5-Large rodam na GPU quando disponível, com fallback transparente para CPU.
 *   **Armazenamento**: [SQLite](https://www.sqlite.org/) (Garantia de persistência rápida e queries indexadas de alta performance).
 *   **Data Science**: [Pandas](https://pandas.pydata.org/) para manipulação de tabelas e [Matplotlib](https://matplotlib.org/) para a plotagem estática de dashboards.
 
@@ -83,7 +94,7 @@ graph TD
 
 ### Pré-requisitos
 *   Python 3.10 ou superior instalado.
-*   Conexão com internet na primeira inicialização para baixar o modelo BLIP-large da Hugging Face (~750 MB).
+*   Conexão com internet na primeira inicialização para baixar os modelos da Hugging Face: BLIP-large (~750 MB) e, se o motor de IA generativa for usado, Flan-T5-Large (~3 GB).
 
 ### Passos para Rodar
 

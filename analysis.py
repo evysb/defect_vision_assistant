@@ -1,6 +1,8 @@
 import os
 import re
 import uuid
+import unicodedata
+import difflib
 from datetime import datetime, timedelta
 from PIL import Image
 from db import executar_query_segura, salvar_defeito
@@ -9,17 +11,28 @@ from db import executar_query_segura, salvar_defeito
 blip_model = None
 blip_processor = None
 
+_device_cache = None
+
+def _obter_device() -> str:
+    """Detecta GPU (CUDA) automaticamente para acelerar a inferência; usa CPU como fallback."""
+    global _device_cache
+    if _device_cache is None:
+        import torch
+        _device_cache = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Dispositivo de inferência selecionado: {_device_cache}")
+    return _device_cache
+
 def carregar_modelo_blip():
     """Carrega o modelo Salesforce/blip-image-captioning-large e seu processador."""
     global blip_model, blip_processor
     if blip_model is None:
         try:
-            import torch
             from transformers import BlipProcessor, BlipForConditionalGeneration
-            print("Carregando Salesforce/blip-image-captioning-large na CPU...")
+            device = _obter_device()
+            print(f"Carregando Salesforce/blip-image-captioning-large em {device}...")
             blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-large")
             blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-large")
-            blip_model.to("cpu")
+            blip_model.to(device)
         except Exception as e:
             raise ImportError(
                 f"Erro ao carregar Hugging Face 'Salesforce/blip-image-captioning-large': {str(e)}. "
@@ -213,9 +226,9 @@ def analyze_image(imagem_path: str, usar_simulador: bool = False) -> dict:
         try:
             model, processor = carregar_modelo_blip()
             image = Image.open(imagem_path).convert("RGB")
-            
+
             # Executa inferência
-            inputs = processor(image, return_tensors="pt")
+            inputs = processor(image, return_tensors="pt").to(_obter_device())
             out = model.generate(**inputs, max_new_tokens=50)
             caption = processor.decode(out[0], skip_special_tokens=True)
             print(f"BLIP original caption: {caption}")
@@ -346,7 +359,326 @@ def traduzir_consulta_para_sql(pergunta: str) -> tuple[str, str]:
     query = f"{base_select} ORDER BY data DESC LIMIT 50"
     return query, periodo
 
-def responder_consulta_defeitos(pergunta: str) -> tuple[str, list]:
+# Variáveis globais para carregamento preguiçoso do modelo Hugging Face de Text-to-SQL
+text2sql_model = None
+text2sql_tokenizer = None
+
+# flan-t5-large (não modelos "dedicados" como sqlcoder/nsql, que só entendem inglês e
+# não seguem instruções): a variante "base" ecoava exemplos do prompt ao acaso, até em
+# perguntas idênticas a um few-shot, então foi trocada por "large" para maior fidelidade.
+TEXT2SQL_MODEL_ID = "google/flan-t5-large"
+
+def carregar_modelo_text2sql():
+    """Carrega o modelo Hugging Face google/flan-t5-large para tradução de linguagem natural em SQL."""
+    global text2sql_model, text2sql_tokenizer
+    if text2sql_model is None:
+        try:
+            from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+            device = _obter_device()
+            print(f"Carregando {TEXT2SQL_MODEL_ID} em {device}...")
+            text2sql_tokenizer = AutoTokenizer.from_pretrained(TEXT2SQL_MODEL_ID)
+            text2sql_model = AutoModelForSeq2SeqLM.from_pretrained(TEXT2SQL_MODEL_ID)
+            text2sql_model.to(device)
+        except Exception as e:
+            raise ImportError(
+                f"Erro ao carregar o modelo Hugging Face '{TEXT2SQL_MODEL_ID}': {str(e)}. "
+                "Certifique-se de que 'transformers', 'torch' e 'sentencepiece' estão instalados corretamente."
+            )
+    return text2sql_model, text2sql_tokenizer
+
+def _montar_prompt_text2sql(pergunta: str) -> str:
+    """Monta o prompt few-shot com o esquema da tabela e o contexto de datas atuais (em português)."""
+    hoje = datetime.now()
+    primeiro_dia_mes_atual = hoje.replace(day=1)
+    ultimo_dia_mes_passado = primeiro_dia_mes_atual - timedelta(days=1)
+    primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+    segunda_atual = hoje - timedelta(days=hoje.weekday())
+
+    contexto_datas = (
+        f"Hoje é {hoje.strftime('%Y-%m-%d')}. "
+        f"O mês passado vai de {primeiro_dia_mes_passado.strftime('%Y-%m-%d')} a {ultimo_dia_mes_passado.strftime('%Y-%m-%d')}. "
+        f"A semana atual começa em {segunda_atual.strftime('%Y-%m-%d')}."
+    )
+
+    return f"""Traduza a pergunta em português para uma query SQL SQLite. Responda apenas com a query SQL, sem explicações.
+
+Tabela: defeitos(id TEXT, data TEXT, tipo TEXT, localizacao TEXT, severidade TEXT, causa TEXT, acao TEXT)
+Valores possíveis para severidade: 'CRÍTICO', 'ALTO', 'MÉDIO', 'BAIXO'.
+A coluna data está no formato ISO 8601 'AAAA-MM-DDTHH:MM:SS'.
+{contexto_datas}
+
+Pergunta: defeitos críticos
+SQL: SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos WHERE severidade = 'CRÍTICO' ORDER BY data DESC
+
+Pergunta: defeitos críticos do mês passado
+SQL: SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos WHERE severidade = 'CRÍTICO' AND data BETWEEN '{primeiro_dia_mes_passado.strftime('%Y-%m-%d')}T00:00:00' AND '{ultimo_dia_mes_passado.strftime('%Y-%m-%d')}T23:59:59' ORDER BY data DESC
+
+Pergunta: todos os registros de ferrugem
+SQL: SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos WHERE tipo LIKE '%ferrugem%' OR tipo LIKE '%corrosão%' OR causa LIKE '%ferrugem%' ORDER BY data DESC
+
+Pergunta: quantas inspeções esta semana
+SQL: SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos WHERE data >= '{segunda_atual.strftime('%Y-%m-%d')}T00:00:00' ORDER BY data DESC
+
+Pergunta: peças com severidade alta em junho
+SQL: SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos WHERE severidade = 'ALTO' AND data LIKE '{hoje.year}-06%' ORDER BY data DESC
+
+Pergunta: {pergunta.strip()}
+SQL:"""
+
+# Colunas reais da tabela `defeitos` (db.py), sempre sem acento
+_COLUNAS_CANONICAS = ("id", "data", "tipo", "localizacao", "severidade", "causa", "acao")
+
+# Palavras-chave/identificadores que nunca devem ser tratados como possível coluna
+_PALAVRAS_RESERVADAS_SQL = {
+    "select", "from", "where", "and", "or", "not", "like", "between", "order", "by",
+    "desc", "asc", "limit", "group", "having", "distinct", "as", "is", "null", "in",
+    "join", "on", "count", "sum", "avg", "min", "max", "defeitos",
+}
+
+def _remover_acentos(texto: str) -> str:
+    return "".join(c for c in unicodedata.normalize("NFKD", texto) if not unicodedata.combining(c))
+
+def _normalizar_colunas_sql(sql: str) -> str:
+    """
+    Corrige nomes de coluna alucinados pelo modelo (acentos copiados da pergunta,
+    ex.: 'Localização', ou pequenos erros de grafia, ex.: 'localizaço'), comparando
+    por proximidade (difflib) com as colunas reais da tabela. Não afeta valores
+    literais entre aspas simples (ex.: 'CRÍTICO', '%ferrugem%').
+    """
+    partes = sql.split("'")
+
+    def substituir(m: re.Match) -> str:
+        token = m.group(0)
+        normalizado = _remover_acentos(token).lower()
+        if normalizado in _PALAVRAS_RESERVADAS_SQL:
+            return token
+        if normalizado in _COLUNAS_CANONICAS:
+            return normalizado
+        if len(normalizado) >= 4:
+            proximas = difflib.get_close_matches(normalizado, _COLUNAS_CANONICAS, n=1, cutoff=0.75)
+            if proximas:
+                return proximas[0]
+        return token
+
+    for i in range(0, len(partes), 2):  # índices pares estão fora de literais entre aspas
+        partes[i] = re.sub(r"[A-Za-zÀ-ÿ_]+", substituir, partes[i])
+
+    return "'".join(partes)
+
+def _deduplicar_condicoes_or(sql: str) -> str:
+    """Remove condições OR repetidas que o modelo às vezes gera (ex.: a mesma cláusula duas vezes)."""
+    match_where = re.search(r"\bWHERE\b", sql, re.IGNORECASE)
+    if not match_where:
+        return sql
+
+    prefixo = sql[:match_where.end()]
+    resto = sql[match_where.end():]
+
+    match_order = re.search(r"\bORDER\s+BY\b", resto, re.IGNORECASE)
+    condicoes_texto = resto[:match_order.start()] if match_order else resto
+    sufixo = resto[match_order.start():] if match_order else ""
+
+    vistas = []
+    unicas = []
+    for parte in re.split(r"\s+OR\s+", condicoes_texto, flags=re.IGNORECASE):
+        chave = parte.strip().lower()
+        if chave and chave not in vistas:
+            vistas.append(chave)
+            unicas.append(parte.strip())
+
+    return f"{prefixo} {' OR '.join(unicas)} {sufixo}".strip()
+
+def _descrever_periodo_a_partir_de_sql(sql: str) -> str:
+    """Tenta descrever em português o período coberto pela query SQL gerada pelo modelo."""
+    m = re.search(r"BETWEEN\s+'([\d\-T:]+)'\s+AND\s+'([\d\-T:]+)'", sql, re.IGNORECASE)
+    if m:
+        try:
+            d1 = datetime.fromisoformat(m.group(1)).strftime("%d/%m/%Y")
+            d2 = datetime.fromisoformat(m.group(2)).strftime("%d/%m/%Y")
+            return f"de {d1} a {d2}"
+        except Exception:
+            pass
+
+    m = re.search(r"data\s*>=\s*'([\d\-T:]+)'", sql, re.IGNORECASE)
+    if m:
+        try:
+            d1 = datetime.fromisoformat(m.group(1)).strftime("%d/%m/%Y")
+            return f"de {d1} até hoje"
+        except Exception:
+            pass
+
+    m = re.search(r"data\s+LIKE\s+'(\d{4})-(\d{2})%'", sql, re.IGNORECASE)
+    if m:
+        return f"de 01/{m.group(2)}/{m.group(1)} a 30/{m.group(2)}/{m.group(1)}"
+
+    return "todo o histórico disponível (conforme interpretado pelo modelo de IA)"
+
+def _extrair_termo_busca_livre(pergunta: str) -> str | None:
+    """
+    Extrai, de forma genérica (sem lista fixa de sinônimos de domínio), a palavra-chave
+    de busca livre mencionada em padrões como 'registros de X', 'defeitos de X',
+    'ocorrências de X' ou 'casos de X'.
+    """
+    m = re.search(
+        r"\b(?:registros?|defeitos?|ocorr[eê]ncias?|casos?|anomalias?)\s+de\s+([a-zà-ÿ]+)",
+        pergunta,
+        re.IGNORECASE,
+    )
+    return m.group(1) if m else None
+
+def _garantir_termo_busca_na_sql(sql: str, pergunta: str) -> str:
+    """
+    Rede de segurança contra o modelo "ecoar" o termo de busca de um exemplo few-shot
+    em vez da palavra realmente citada na pergunta (ex.: pedir 'corrosão' e a SQL gerada
+    buscar 'ferrugem'). Se o termo livre da pergunta não aparecer em nenhum literal da
+    SQL, adiciona uma condição OR garantindo que a busca do usuário seja respeitada.
+    """
+    termo = _extrair_termo_busca_livre(pergunta)
+    if not termo:
+        return sql
+
+    termo_normalizado = _remover_acentos(termo).lower()
+    literais = re.findall(r"'([^']*)'", sql)
+    if any(termo_normalizado in _remover_acentos(lit).lower() for lit in literais):
+        return sql  # o termo da pergunta já está presente na SQL gerada
+
+    nova_condicao = f"tipo LIKE '%{termo}%' OR causa LIKE '%{termo}%'"
+    match_where = re.search(r"\bWHERE\b", sql, re.IGNORECASE)
+    if match_where:
+        return f"{sql[:match_where.end()]} ({nova_condicao}) OR {sql[match_where.end():].strip()}"
+
+    match_order = re.search(r"\bORDER\s+BY\b", sql, re.IGNORECASE)
+    if match_order:
+        return f"{sql[:match_order.start()]} WHERE {nova_condicao} {sql[match_order.start():]}"
+    return f"{sql} WHERE {nova_condicao}"
+
+def _detectar_periodo_pergunta(pergunta: str) -> tuple[str, str] | None:
+    """
+    Detecta uma referência temporal explícita na pergunta (esta semana, mês passado,
+    este mês ou um mês nomeado) e retorna a condição SQL de data correspondente e a
+    descrição do período, replicando a mesma lógica de datas usada no prompt few-shot
+    e no motor baseado em regras. Retorna None se nenhuma referência for encontrada.
+    """
+    p = _remover_acentos(pergunta.lower())
+    hoje = datetime.now()
+
+    if "esta semana" in p or "semana atual" in p:
+        segunda = hoje - timedelta(days=hoje.weekday())
+        data_ini = segunda.strftime("%Y-%m-%d")
+        return (
+            f"data >= '{data_ini}T00:00:00'",
+            f"de {segunda.strftime('%d/%m/%Y')} até hoje",
+        )
+
+    if "mes passado" in p:
+        primeiro_dia_deste_mes = hoje.replace(day=1)
+        ultimo_dia_mes_passado = primeiro_dia_deste_mes - timedelta(days=1)
+        primeiro_dia_mes_passado = ultimo_dia_mes_passado.replace(day=1)
+        return (
+            f"data BETWEEN '{primeiro_dia_mes_passado.strftime('%Y-%m-%d')}T00:00:00' "
+            f"AND '{ultimo_dia_mes_passado.strftime('%Y-%m-%d')}T23:59:59'",
+            f"de {primeiro_dia_mes_passado.strftime('%d/%m/%Y')} a {ultimo_dia_mes_passado.strftime('%d/%m/%Y')}",
+        )
+
+    if "este mes" in p:
+        data_ini = hoje.replace(day=1).strftime("%Y-%m-%d")
+        return (
+            f"data >= '{data_ini}T00:00:00'",
+            f"do início de {hoje.strftime('%B/%Y')} até hoje",
+        )
+
+    meses_pt = {
+        "janeiro": "01", "fevereiro": "02", "marco": "03",
+        "abril": "04", "maio": "05", "junho": "06", "julho": "07",
+        "agosto": "08", "setembro": "09", "outubro": "10",
+        "novembro": "11", "dezembro": "12",
+    }
+    for nome_mes, cod_mes in meses_pt.items():
+        if nome_mes in p:
+            return (
+                f"data LIKE '{hoje.year}-{cod_mes}%'",
+                f"de 01/{cod_mes}/{hoje.year} a 30/{cod_mes}/{hoje.year}",
+            )
+
+    return None
+
+def _condicoes_sql_relacionadas_a_pergunta(sql: str, pergunta: str) -> bool:
+    """
+    Verifica se algum literal usado nas condições da SQL (ex.: '%ferrugem%', 'CRÍTICO')
+    tem relação textual com a pergunta original (ignorando acentos/maiúsculas e
+    desconsiderando literais de data/hora). Usado para distinguir condições legítimas
+    de condições inteiramente alucinadas/ecoadas de outro exemplo do prompt few-shot.
+    """
+    pergunta_normalizada = _remover_acentos(pergunta.lower())
+    for lit in re.findall(r"'([^']*)'", sql):
+        lit_limpo = _remover_acentos(lit.lower()).strip("%")
+        if not lit_limpo or re.match(r"^[\d\-t:]+$", lit_limpo):
+            continue  # ignora valores de data/hora e literais vazios
+        if lit_limpo in pergunta_normalizada:
+            return True
+    return False
+
+def _garantir_periodo_na_sql(sql: str, pergunta: str) -> tuple[str, str | None]:
+    """
+    Rede de segurança contra o modelo ignorar (ou ecoar de outro exemplo few-shot) a
+    referência temporal citada na pergunta, ex.: pedir 'esta semana' e a SQL gerada vir
+    sem filtro de data nenhum ou com condições de outro tema (ex.: 'ferrugem'). Se a
+    pergunta tiver uma referência temporal reconhecida e ela não estiver refletida na
+    SQL, corrige a condição de data — preservando as demais condições apenas se
+    parecerem relacionadas à pergunta, e descartando-as como alucinação caso contrário.
+    Retorna (sql_corrigida, periodo_forcado_ou_None).
+    """
+    periodo_info = _detectar_periodo_pergunta(pergunta)
+    if not periodo_info:
+        return sql, None
+
+    condicao_data, periodo_desc = periodo_info
+    if condicao_data.lower() in sql.lower():
+        return sql, None  # a SQL já reflete corretamente o período pedido
+
+    match_where = re.search(r"\bWHERE\b", sql, re.IGNORECASE)
+    match_order = re.search(r"\bORDER\s+BY\b", sql, re.IGNORECASE)
+    sufixo = sql[match_order.start():] if match_order else "ORDER BY data DESC"
+
+    if match_where and _condicoes_sql_relacionadas_a_pergunta(sql, pergunta):
+        fim_condicoes = match_order.start() if match_order else len(sql)
+        condicoes_existentes = sql[match_where.end():fim_condicoes].strip()
+        return f"{sql[:match_where.end()]} ({condicoes_existentes}) AND {condicao_data} {sufixo}".strip(), periodo_desc
+
+    # condições ausentes ou aparentemente alucinadas/ecoadas de outro exemplo: reconstrói do zero
+    prefixo_select = re.split(r"\bWHERE\b|\bORDER\s+BY\b", sql, flags=re.IGNORECASE)[0].strip()
+    return f"{prefixo_select} WHERE {condicao_data} {sufixo}".strip(), periodo_desc
+
+def traduzir_consulta_para_sql_hf(pergunta: str) -> tuple[str, str]:
+    """
+    Usa o modelo Hugging Face google/flan-t5-large para traduzir, via aprendizado
+    em contexto (few-shot), a pergunta em linguagem natural para uma query SQL.
+    Retorna (SQL_Query, Descricao_Periodo_Confirmado).
+    """
+    model, tokenizer = carregar_modelo_text2sql()
+    prompt = _montar_prompt_text2sql(pergunta)
+
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512).to(_obter_device())
+    out = model.generate(**inputs, max_new_tokens=128, num_beams=4)
+    sql_gerado = tokenizer.decode(out[0], skip_special_tokens=True).strip()
+
+    # Isola apenas a instrução SQL gerada, descartando qualquer texto extra
+    match = re.search(r"(SELECT\s+.*)", sql_gerado, re.IGNORECASE | re.DOTALL)
+    if not match:
+        query_fallback = "SELECT id, data, tipo, localizacao, severidade, acao FROM defeitos ORDER BY data DESC LIMIT 50"
+        return query_fallback, "todo o histórico disponível (o modelo de IA não retornou uma SQL válida)"
+
+    query_sql = match.group(1).split(";")[0].strip()
+    query_sql = _normalizar_colunas_sql(query_sql)
+    query_sql = _deduplicar_condicoes_or(query_sql)
+    query_sql = _garantir_termo_busca_na_sql(query_sql, pergunta)
+    query_sql, periodo_forcado = _garantir_periodo_na_sql(query_sql, pergunta)
+    if not re.search(r"\bORDER\s+BY\b", query_sql, re.IGNORECASE):
+        query_sql = f"{query_sql} ORDER BY data DESC"
+    periodo = periodo_forcado or _descrever_periodo_a_partir_de_sql(query_sql)
+    return query_sql, periodo
+
+def responder_consulta_defeitos(pergunta: str, backend: str = "Baseado em Regras (Local)") -> tuple[str, list]:
     """
     Interpreta a pergunta, executa a query e gera uma resposta em formato técnico
     confirmando o período e total de registros.
@@ -355,16 +687,22 @@ def responder_consulta_defeitos(pergunta: str) -> tuple[str, list]:
         return "Por favor, digite uma pergunta para consultar o histórico.", []
         
     try:
-        # Traduz a pergunta para SQL
-        query_sql, periodo_analisado = traduzir_consulta_para_sql(pergunta)
-        
+        # Traduz a pergunta para SQL usando o motor selecionado
+        usar_hf = backend.startswith("Hugging Face")
+        if usar_hf:
+            query_sql, periodo_analisado = traduzir_consulta_para_sql_hf(pergunta)
+        else:
+            query_sql, periodo_analisado = traduzir_consulta_para_sql(pergunta)
+
         # Executa no banco de forma segura
         resultados = executar_query_segura(query_sql)
         total_registros = len(resultados)
-        
+
         # Confirmação do período analisado e total de registros (Regra de Comportamento 5)
+        motor_nome = "Hugging Face Flan-T5-Large (IA Generativa)" if usar_hf else "Baseado em Regras (Local)"
         resposta_texto = (
             f"### Relatório de Consulta ao Histórico\n\n"
+            f"🧠 **Motor de tradução:** {motor_nome}\n"
             f"📅 **Período analisado:** {periodo_analisado}\n"
             f"📊 **Total de registros encontrados:** {total_registros}\n\n"
             f"**Resumo Técnico:** "

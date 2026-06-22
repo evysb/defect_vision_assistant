@@ -1,6 +1,7 @@
 gradio>=4.0
 transformers>=4.35
 torch
+sentencepiece
 Pillow
 matplotlib
 pandas

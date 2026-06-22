@@ -381,9 +381,9 @@ def processar_inspecao(imagem_path: str, backend: str):
         erro_msg = f"❌ **Erro no processamento da inspeção:** {str(e)}"
         return erro_msg, gr.update(visible=False), gr.update(), gr.update()
 
-def processar_consulta(pergunta: str):
+def processar_consulta(pergunta: str, backend: str):
     """Processa a consulta NL, gera a tabela de dados estruturada e atualiza o CSV de exportação."""
-    resposta_texto, df_dados = responder_consulta_defeitos(pergunta)
+    resposta_texto, df_dados = responder_consulta_defeitos(pergunta, backend)
     
     # Converte os resultados para um DataFrame do Pandas para exibição no Gradio Dataframe
     if df_dados:
@@ -468,6 +468,13 @@ with gr.Blocks(title="Assistente de Manutenção Industrial") as interface:
                         placeholder="Ex: defeitos críticos do mês passado ou todos os registros de ferrugem",
                         lines=3
                     )
+
+                    backend_consulta_select = gr.Radio(
+                        choices=["Baseado em Regras (Local)", "Hugging Face Flan-T5-Large (IA Generativa)"],
+                        value="Baseado em Regras (Local)",
+                        label="Motor de Tradução Text-to-SQL"
+                    )
+
                     btn_consultar = gr.Button("🔎 Enviar Consulta", elem_classes="primary-btn")
                     
                     gr.Markdown("💡 **Exemplos de consultas válidas:**\n"
@@ -515,7 +522,7 @@ with gr.Blocks(title="Assistente de Manutenção Industrial") as interface:
     
     btn_consultar.click(
         fn=processar_consulta,
-        inputs=[txt_pergunta],
+        inputs=[txt_pergunta, backend_consulta_select],
         outputs=[consulta_resumo, df_resultados, csv_download]
     )
 
