@@ -4,35 +4,6 @@ O **DefectVision Industrial Assistant** é uma plataforma inteligente e moderna 
 
 ---
 
-## 📊 Arquitetura e Fluxo do Sistema
-
-O assistente foi desenhado para atuar de forma ponta a ponta na esteira de inspeção de peças industriais. O fluxo geral compreende a captura de dados, o diagnóstico inteligente por IA, a persistência otimizada e a busca semântica de registros históricos:
-
-```mermaid
-graph TD
-    A[Colaborador/Inspetor] -->|1. Envia Imagem ou Webcam| B(Interface Gradio Web)
-    B -->|2. Executa Inferência de Visão| C{Análise Visual}
-    C -->|Opção Padrão| D[Salesforce/blip-image-captioning-large]
-    C -->|Opção de Fallback| E[Simulador Industrial Offline]
-    D -->|Retorna legenda em inglês| F[Tradutor & Mapeador Técnico]
-    E -->|Gera dados sintéticos realistas| G[Estrutura JSON do Defeito]
-    F -->|Dedução de severidade e ações| G
-    G -->|3. Salva Registro| H[(Banco SQLite otimizado)]
-    H -->|4. Atualiza Galeria & Matplotlib| B
-    
-    A -->|5. Digita Busca em Linguagem Natural| I[Aba de Consulta]
-    I -->|6. Tradução para SQL| L{Motor Text-to-SQL}
-    L -->|Opção Padrão| M[Regras Locais por Palavra-chave]
-    L -->|Opção de IA Generativa| N[Hugging Face google/flan-t5-large]
-    M -->|Query SQL| J[Compilador de Query SQL Segura]
-    N -->|Query SQL| J
-    J -->|7. Executa SELECT somente-leitura| H
-    H -->|8. Retorna Linhas| K[Visualização de Tabela & Exportador CSV]
-    K -->|Exibe Relatório| A
-```
-
----
-
 ## ✨ Principais Funcionalidades
 
 ### 1. 📸 Inspeção Visual Automatizada (Multimodal)
